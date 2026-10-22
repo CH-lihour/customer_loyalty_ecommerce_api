@@ -54,6 +54,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Idle Timeout Minutes (Sliding Expiration)
+    |--------------------------------------------------------------------------
+    |
+    | A token expires after this many minutes without being used. Every
+    | authenticated request resets the timer (via "last_used_at"), so active
+    | users stay logged in. Set to null to disable.
+    |
+    */
+
+    'idle_timeout' => env('SANCTUM_IDLE_TIMEOUT', 60 * 24 * 7),
+
+    /*
+    |--------------------------------------------------------------------------
     | Token Prefix
     |--------------------------------------------------------------------------
     |
