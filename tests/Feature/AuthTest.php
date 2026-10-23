@@ -15,7 +15,7 @@ class AuthTest extends TestCase
     {
         $user = User::factory()->create(['password' => 'secret123']);
 
-        $response = $this->postJson('/api/login', [
+        $response = $this->postJson('/api/backend/login', [
             'email' => $user->email,
             'password' => 'secret123',
         ]);
@@ -24,7 +24,7 @@ class AuthTest extends TestCase
             ->assertJsonStructure(['message', 'token', 'token_type', 'user' => ['id', 'email']]);
 
         $this->withToken($response->json('token'))
-            ->getJson('/api/profile')
+            ->getJson('/api/backend/profile')
             ->assertOk()
             ->assertJsonPath('data.email', $user->email);
     }
@@ -33,7 +33,7 @@ class AuthTest extends TestCase
     {
         $user = User::factory()->create(['password' => 'secret123']);
 
-        $this->postJson('/api/login', [
+        $this->postJson('/api/backend/login', [
             'email' => $user->email,
             'password' => 'wrong-password',
         ])->assertUnprocessable()->assertJsonValidationErrors('email');
@@ -41,14 +41,14 @@ class AuthTest extends TestCase
 
     public function test_login_requires_email_and_password(): void
     {
-        $this->postJson('/api/login', [])
+        $this->postJson('/api/backend/login', [])
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['email', 'password']);
     }
 
     public function test_unauthenticated_api_request_returns_json_401_without_accept_header(): void
     {
-        $this->post('/api/logout')
+        $this->post('/api/backend/logout')
             ->assertUnauthorized()
             ->assertJson(['message' => 'Unauthenticated.']);
     }
@@ -62,7 +62,7 @@ class AuthTest extends TestCase
         foreach ([50, 50] as $minutes) {
             $this->travel($minutes)->minutes();
             $this->app['auth']->forgetGuards();
-            $this->withToken($token)->getJson('/api/profile')->assertOk();
+            $this->withToken($token)->getJson('/api/backend/profile')->assertOk();
         }
     }
 
@@ -73,14 +73,14 @@ class AuthTest extends TestCase
 
         $this->travel(61)->minutes();
 
-        $this->withToken($token)->getJson('/api/profile')->assertUnauthorized();
+        $this->withToken($token)->getJson('/api/backend/profile')->assertUnauthorized();
     }
 
     public function test_user_can_logout(): void
     {
         $token = $this->login()->json('token');
 
-        $this->withToken($token)->postJson('/api/logout')->assertOk();
+        $this->withToken($token)->postJson('/api/backend/logout')->assertOk();
 
         $this->assertDatabaseCount('personal_access_tokens', 0);
     }
@@ -89,7 +89,7 @@ class AuthTest extends TestCase
     {
         $user = User::factory()->create(['password' => 'secret123']);
 
-        return $this->postJson('/api/login', [
+        return $this->postJson('/api/backend/login', [
             'email' => $user->email,
             'password' => 'secret123',
         ])->assertOk();

@@ -16,7 +16,7 @@ class CustomerAuthTest extends TestCase
     {
         $customer = Customer::factory()->create(['password' => 'secret123']);
 
-        $response = $this->postJson('/api/customer/login', [
+        $response = $this->postJson('/api/login', [
             'email' => $customer->email,
             'password' => 'secret123',
         ]);
@@ -26,7 +26,7 @@ class CustomerAuthTest extends TestCase
             ->assertJsonMissingPath('customer.password');
 
         $this->withToken($response->json('token'))
-            ->getJson('/api/customer/profile')
+            ->getJson('/api/profile')
             ->assertOk()
             ->assertJsonPath('data.email', $customer->email);
     }
@@ -35,7 +35,7 @@ class CustomerAuthTest extends TestCase
     {
         $customer = Customer::factory()->create(['password' => 'secret123']);
 
-        $this->postJson('/api/customer/login', [
+        $this->postJson('/api/login', [
             'email' => $customer->email,
             'password' => 'wrong-password',
         ])->assertUnprocessable()->assertJsonValidationErrors('email');
@@ -43,7 +43,7 @@ class CustomerAuthTest extends TestCase
 
     public function test_login_requires_email_and_password(): void
     {
-        $this->postJson('/api/customer/login', [])
+        $this->postJson('/api/login', [])
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['email', 'password']);
     }
@@ -52,7 +52,7 @@ class CustomerAuthTest extends TestCase
     {
         $customer = Customer::factory()->inactive()->create(['password' => 'secret123']);
 
-        $this->postJson('/api/customer/login', [
+        $this->postJson('/api/login', [
             'email' => $customer->email,
             'password' => 'secret123',
         ])->assertUnprocessable()->assertJsonValidationErrors('email');
@@ -64,7 +64,7 @@ class CustomerAuthTest extends TestCase
     {
         $user = User::factory()->create(['password' => 'secret123']);
 
-        $this->postJson('/api/customer/login', [
+        $this->postJson('/api/login', [
             'email' => $user->email,
             'password' => 'secret123',
         ])->assertUnprocessable()->assertJsonValidationErrors('email');
@@ -74,7 +74,7 @@ class CustomerAuthTest extends TestCase
     {
         $token = $this->login()->json('token');
 
-        $this->withToken($token)->getJson('/api/profile')->assertUnauthorized();
+        $this->withToken($token)->getJson('/api/backend/profile')->assertUnauthorized();
     }
 
     public function test_staff_token_cannot_access_customer_routes(): void
@@ -82,14 +82,14 @@ class CustomerAuthTest extends TestCase
         $user = User::factory()->create();
         $token = $user->createToken('test')->plainTextToken;
 
-        $this->withToken($token)->getJson('/api/customer/profile')->assertUnauthorized();
+        $this->withToken($token)->getJson('/api/profile')->assertUnauthorized();
     }
 
     public function test_customer_can_logout(): void
     {
         $token = $this->login()->json('token');
 
-        $this->withToken($token)->postJson('/api/customer/logout')->assertOk();
+        $this->withToken($token)->postJson('/api/logout')->assertOk();
 
         $this->assertDatabaseCount('personal_access_tokens', 0);
     }
@@ -98,7 +98,7 @@ class CustomerAuthTest extends TestCase
     {
         $customer = Customer::factory()->create(['password' => 'secret123']);
 
-        return $this->postJson('/api/customer/login', [
+        return $this->postJson('/api/login', [
             'email' => $customer->email,
             'password' => 'secret123',
         ])->assertOk();
