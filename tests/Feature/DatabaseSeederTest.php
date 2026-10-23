@@ -15,7 +15,7 @@ class DatabaseSeederTest extends TestCase
     {
         $this->seed(DatabaseSeeder::class);
 
-        $this->postJson('/api/customer/login', [
+        $this->postJson('/api/login', [
             'email' => 'customer@example.com',
             'password' => 'password',
         ])->assertOk();

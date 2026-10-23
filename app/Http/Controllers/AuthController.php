@@ -17,12 +17,12 @@ class AuthController extends Controller
     public function login(Request $request): JsonResponse
     {
         $credentials = $request->validate([
-            'email'       => ['required', 'email'],
-            'password'    => ['required', 'string'],
+            'email' => ['required', 'email'],
+            'password' => ['required', 'string'],
             'device_name' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $user = User::where('email', $credentials['email'])->first(['id', 'name', 'email', 'password']);
+        $user = User::where('email', $credentials['email'])->first(['id', 'name', 'email', 'password', 'is_active']);
 
         if (! $user || ! Hash::check($credentials['password'], $user->password)) {
             throw ValidationException::withMessages([
@@ -30,14 +30,20 @@ class AuthController extends Controller
             ]);
         }
 
-        $name  = $credentials['device_name'] ?? $request->userAgent() ?? 'api';
+        if (! $user->is_active) {
+            throw ValidationException::withMessages([
+                'email' => ['This staff account has been disabled.'],
+            ]);
+        }
+
+        $name = $credentials['device_name'] ?? $request->userAgent() ?? 'api';
         $token = $user->createToken(Str::limit($name, 255, ''))->plainTextToken;
 
         return response()->json([
-            'message'    => 'Login successful',
-            'token'      => $token,
+            'message' => 'Login successful',
+            'token' => $token,
             'token_type' => 'Bearer',
-            'user'       => $user,
+            'user' => $user,
         ]);
     }
 

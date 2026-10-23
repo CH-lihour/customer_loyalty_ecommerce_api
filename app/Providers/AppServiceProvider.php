@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Models\User;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Sanctum\PersonalAccessToken;
 use Laravel\Sanctum\Sanctum;
@@ -34,5 +36,8 @@ class AppServiceProvider extends ServiceProvider
 
             return $lastActivity->gt(now()->subMinutes((int) $idleTimeout));
         });
+
+        Gate::define('manage-staff', fn (User $user): bool => $user->isSuperAdmin());
+        Gate::define('access-page', fn (User $user, string $page): bool => $user->canAccessPage($page));
     }
 }

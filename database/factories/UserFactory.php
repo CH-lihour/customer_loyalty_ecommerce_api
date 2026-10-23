@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
@@ -31,6 +32,38 @@ class UserFactory extends Factory
             'password' => static::$password ??= Hash::make('password'),
             'remember_token' => Str::random(10),
         ];
+    }
+
+    /**
+     * Give the user the Super Admin role, reusing it when it already exists.
+     */
+    public function superAdmin(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role_id' => Role::where('code', Role::SUPER_ADMIN)->value('id') ?? Role::factory()->superAdmin(),
+        ]);
+    }
+
+    /**
+     * Give the user a new role with only the given pages.
+     *
+     * @param  list<string>  $pages
+     */
+    public function withPages(array $pages): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role_id' => Role::factory()->withPages($pages),
+        ]);
+    }
+
+    /**
+     * Indicate that the staff account is disabled.
+     */
+    public function inactive(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'is_active' => false,
+        ]);
     }
 
     /**
