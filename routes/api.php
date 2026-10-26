@@ -36,6 +36,7 @@ Route::prefix('backend')->group(function () {
 });
 
 // Customer Side
+Route::post('/register', [CustomerAuthController::class, 'register']);
 Route::post('/login', [CustomerAuthController::class, 'login']);
 
 Route::middleware('auth:customer')->group(function () {
