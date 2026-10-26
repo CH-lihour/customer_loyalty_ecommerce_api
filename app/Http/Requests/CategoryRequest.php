@@ -29,7 +29,7 @@ class CategoryRequest extends FormRequest
         $presence = $this->isMethod('PATCH') ? 'sometimes' : 'required';
 
         return [
-            'parent_id' => ['nullable', 'integer', Rule::exists('categories', 'id')->withoutTrashed(), Rule::notIn([$category?->id])],
+            'parent_id' => ['nullable', 'integer', Rule::exists('categories', 'id')->withoutTrashed(), Rule::notIn([$category?->id]), $this->notOwnDescendant($category)],
             'name' => [$presence, 'string', 'max:40', $this->uniqueName($category)],
             'name_kh' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:1000'],
@@ -58,6 +58,33 @@ class CategoryRequest extends FormRequest
             fn ($value) => is_string($value) ? trim($value) : $value,
             $this->only(['name', 'name_kh', 'description']),
         ));
+    }
+
+    /**
+     * A category cannot move under one of its own sub-categories, which would make a loop.
+     */
+    private function notOwnDescendant(?Category $category): Closure
+    {
+        return function (string $attribute, mixed $value, Closure $fail) use ($category): void {
+            if (! $category) {
+                return;
+            }
+
+            // Walk up from the proposed parent; reaching this category means the parent sits beneath it.
+            $visited = [];
+            $ancestorId = Category::whereKey($value)->value('parent_id');
+
+            while ($ancestorId && ! in_array((int) $ancestorId, $visited, true)) {
+                if ((int) $ancestorId === $category->id) {
+                    $fail('A category cannot be moved under one of its own sub-categories.');
+
+                    return;
+                }
+
+                $visited[] = (int) $ancestorId;
+                $ancestorId = Category::whereKey($ancestorId)->value('parent_id');
+            }
+        };
     }
 
     /**

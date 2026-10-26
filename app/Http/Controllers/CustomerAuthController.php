@@ -6,12 +6,16 @@ use App\Http\Requests\CustomerRegisterRequest;
 use App\Models\Customer;
 use App\Models\Referral;
 use App\Models\Tier;
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Laravel\Sanctum\PersonalAccessToken;
+use Throwable;
 
 class CustomerAuthController extends Controller
 {
@@ -25,44 +29,59 @@ class CustomerAuthController extends Controller
      */
     public function register(CustomerRegisterRequest $request): JsonResponse
     {
-        $data = $request->safe()->except(['avatar', 'referral_code', 'device_name']);
-        $entryTier = Tier::orderBy('min_points')->first();
+        return $this->attempt('Could not create your account. Please try again.', function () use ($request): JsonResponse {
+            $data = $request->safe()->except(['avatar', 'referral_code', 'device_name']);
+            $entryTier = Tier::orderBy('min_points')->first();
 
-        abort_if(! $entryTier, 503, 'Registration is unavailable until loyalty tiers are set up.'); 
+            abort_if(! $entryTier, 503, 'Registration is unavailable until loyalty tiers are set up.');
 
-        $avatarPath = $request->file('avatar')?->store('customers/avatars', self::AVATAR_DISK);
+            $avatarPath = $request->file('avatar')?->store('customers/avatars', self::AVATAR_DISK) ?: null;
 
-        $customer = DB::transaction(function () use ($data, $entryTier, $avatarPath, $request): Customer {
-            $customer = Customer::create([
-                ...$data,
-                'tier_id' => $entryTier->id,
-                'avatar' => $avatarPath,
-                'referral_code' => $this->uniqueReferralCode(),
-            ]);
+            try {
+                $customer = DB::transaction(function () use ($data, $entryTier, $avatarPath, $request): Customer {
+                    $customer = Customer::create([
+                        ...$data,
+                        'tier_id' => $entryTier->id,
+                        'avatar' => $avatarPath,
+                        'referral_code' => $this->uniqueReferralCode(),
+                    ]);
 
-            if ($referralCode = $request->validated('referral_code')) {
-                Referral::create([
-                    'referrer_id' => Customer::where('referral_code', $referralCode)->value('id'),
-                    'referred_id' => $customer->id,
-                ]);
+                    $referralCode = $request->validated('referral_code');
+                    $referrerId = $referralCode ? Customer::where('referral_code', $referralCode)->value('id') : null;
+
+                    // The code was valid during validation; skip the referral if that customer is gone since.
+                    if ($referrerId) {
+                        Referral::create([
+                            'referrer_id' => $referrerId,
+                            'referred_id' => $customer->id,
+                        ]);
+                    }
+
+                    return $customer;
+                });
+            } catch (Throwable $exception) {
+                // Nothing references the uploaded avatar once the customer row is rolled back.
+                if ($avatarPath) {
+                    Storage::disk(self::AVATAR_DISK)->delete($avatarPath);
+                }
+
+                throw $exception;
             }
 
-            return $customer;
+            $name = $request->validated('device_name') ?? $request->userAgent() ?? 'api';
+            $token = $customer->createToken(Str::limit($name, 255, ''))->plainTextToken;
+
+            return response()->json([
+                'message' => 'Registration successful',
+                'token' => $token,
+                'token_type' => 'Bearer',
+                'customer' => [
+                    ...$customer->refresh()->only(['id', 'name', 'name_kh', 'email', 'phone', 'province', 'referral_code', 'points_balance']),
+                    'avatar' => $avatarPath ? url('storage/'.$avatarPath) : null,
+                    'tier' => $entryTier->only(['id', 'name']),
+                ],
+            ], 201);
         });
-
-        $name = $request->validated('device_name') ?? $request->userAgent() ?? 'api';
-        $token = $customer->createToken(Str::limit($name, 255, ''))->plainTextToken;
-
-        return response()->json([
-            'message' => 'Registration successful',
-            'token' => $token,
-            'token_type' => 'Bearer',
-            'customer' => [
-                ...$customer->refresh()->only(['id', 'name', 'name_kh', 'email', 'phone', 'province', 'referral_code', 'points_balance']),
-                'avatar' => $avatarPath ? url('storage/'.$avatarPath) : null,
-                'tier' => $entryTier->only(['id', 'name']),
-            ],
-        ], 201);
     }
 
     /**
@@ -70,35 +89,37 @@ class CustomerAuthController extends Controller
      */
     public function login(Request $request): JsonResponse
     {
-        $credentials = $request->validate([
-            'email' => ['required', 'email'],
-            'password' => ['required', 'string'],
-            'device_name' => ['nullable', 'string', 'max:255'],
-        ]);
-
-        $customer = Customer::where('email', $credentials['email'])->first(['id', 'name', 'email', 'phone', 'password', 'is_active']);
-
-        if (! $customer || ! Hash::check($credentials['password'], $customer->password)) {
-            throw ValidationException::withMessages([
-                'email' => ['The provided credentials are incorrect.'],
+        return $this->attempt('Could not sign in. Please try again.', function () use ($request): JsonResponse {
+            $credentials = $request->validate([
+                'email' => ['required', 'email'],
+                'password' => ['required', 'string'],
+                'device_name' => ['nullable', 'string', 'max:255'],
             ]);
-        }
 
-        if (! $customer->is_active) {
-            throw ValidationException::withMessages([
-                'email' => ['This account has been deactivated.'],
+            $customer = Customer::where('email', $credentials['email'])->first(['id', 'name', 'email', 'phone', 'password', 'is_active']);
+
+            if (! $customer || ! $customer->password || ! Hash::check($credentials['password'], $customer->password)) {
+                throw ValidationException::withMessages([
+                    'email' => ['The provided credentials are incorrect.'],
+                ]);
+            }
+
+            if (! $customer->is_active) {
+                throw ValidationException::withMessages([
+                    'email' => ['This account has been deactivated.'],
+                ]);
+            }
+
+            $name = $credentials['device_name'] ?? $request->userAgent() ?? 'api';
+            $token = $customer->createToken(Str::limit($name, 255, ''))->plainTextToken;
+
+            return response()->json([
+                'message' => 'Login successful',
+                'token' => $token,
+                'token_type' => 'Bearer',
+                'customer' => $customer->only(['id', 'name', 'email', 'phone']),
             ]);
-        }
-
-        $name = $credentials['device_name'] ?? $request->userAgent() ?? 'api';
-        $token = $customer->createToken(Str::limit($name, 255, ''))->plainTextToken;
-
-        return response()->json([
-            'message' => 'Login successful',
-            'token' => $token,
-            'token_type' => 'Bearer',
-            'customer' => $customer->only(['id', 'name', 'email', 'phone']),
-        ]);
+        });
     }
 
     /**
@@ -106,9 +127,21 @@ class CustomerAuthController extends Controller
      */
     public function logout(Request $request): JsonResponse
     {
-        $request->user()->currentAccessToken()->delete();
+        return $this->attempt('Could not sign out. Please try again.', function () use ($request): JsonResponse {
+            $customer = $request->user();
 
-        return response()->json(['message' => 'Logged out']);
+            if (! $customer) {
+                throw new AuthenticationException;
+            }
+
+            $token = $customer->currentAccessToken();
+
+            if ($token instanceof PersonalAccessToken) {
+                $token->delete();
+            }
+
+            return response()->json(['message' => 'Logged out']);
+        });
     }
 
     /**

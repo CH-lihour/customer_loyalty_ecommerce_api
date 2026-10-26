@@ -4,12 +4,14 @@ namespace Tests\Feature;
 
 use App\Models\Category;
 use App\Models\Product;
+use App\Models\ProductImage;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
+use RuntimeException;
 use Tests\TestCase;
 
 class ProductTest extends TestCase
@@ -75,6 +77,24 @@ class ProductTest extends TestCase
             ->assertJsonPath('data.category.id', $category->id);
 
         $this->assertStringStartsWith('PRD-', $response->json('data.sku'));
+    }
+
+    public function test_product_is_not_saved_when_its_images_fail_to_save(): void
+    {
+        Storage::fake('public');
+        config(['app.debug' => false]);
+        ProductImage::creating(fn () => throw new RuntimeException('Disk full'));
+
+        $this->post('/api/backend/products', [
+            'category_id' => Category::factory()->create()->id,
+            'name' => 'Palm Sugar',
+            'price' => '4.5',
+            'images' => [UploadedFile::fake()->image('front.jpg')],
+        ], ['Accept' => 'application/json'])
+            ->assertInternalServerError()
+            ->assertExactJson(['success' => false, 'message' => 'Could not create the product.']);
+
+        $this->assertDatabaseCount('products', 0);
     }
 
     public function test_product_values_are_validated(): void

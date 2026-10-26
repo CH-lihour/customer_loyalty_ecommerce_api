@@ -8,6 +8,7 @@ use App\Models\Product;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
+use RuntimeException;
 use Tests\TestCase;
 
 class CategoryTest extends TestCase
@@ -119,6 +120,62 @@ class CategoryTest extends TestCase
         $this->patchJson("/api/backend/categories/{$category->id}", ['parent_id' => $category->id])
             ->assertUnprocessable()
             ->assertJsonValidationErrors('parent_id');
+    }
+
+    public function test_category_can_be_created_under_a_parent_and_moved_back_to_the_top(): void
+    {
+        $drinks = Category::factory()->create(['name' => 'Drinks']);
+
+        $id = $this->postJson('/api/backend/categories', ['name' => 'Coffee', 'parent_id' => $drinks->id])
+            ->assertCreated()
+            ->assertJsonPath('data.parent_id', $drinks->id)
+            ->assertJsonPath('data.parent.name', 'Drinks')
+            ->json('data.id');
+
+        $this->getJson('/api/backend/categories?search=coffee')
+            ->assertJsonPath('data.0.parent.name', 'Drinks');
+
+        $this->patchJson("/api/backend/categories/{$id}", ['parent_id' => null])
+            ->assertOk()
+            ->assertJsonPath('data.parent_id', null)
+            ->assertJsonPath('data.parent', null);
+    }
+
+    public function test_category_cannot_move_under_its_own_sub_category(): void
+    {
+        $drinks = Category::factory()->create();
+        $coffee = Category::factory()->create(['parent_id' => $drinks->id]);
+        $beans = Category::factory()->create(['parent_id' => $coffee->id]);
+
+        $this->patchJson("/api/backend/categories/{$drinks->id}", ['parent_id' => $beans->id])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['parent_id' => 'A category cannot be moved under one of its own sub-categories.']);
+
+        $this->patchJson("/api/backend/categories/{$beans->id}", ['parent_id' => $drinks->id])->assertOk();
+    }
+
+    public function test_unexpected_failure_returns_a_json_error_and_saves_nothing(): void
+    {
+        config(['app.debug' => false]);
+        Category::creating(fn () => throw new RuntimeException('Database went away'));
+
+        $this->postJson('/api/backend/categories', ['name' => 'Snacks'])
+            ->assertInternalServerError()
+            ->assertExactJson(['success' => false, 'message' => 'Could not create the category.']);
+
+        $this->assertDatabaseCount('categories', 0);
+    }
+
+    public function test_category_with_sub_categories_cannot_be_deleted(): void
+    {
+        $drinks = Category::factory()->create(['name' => 'Drinks']);
+        Category::factory()->create(['parent_id' => $drinks->id]);
+
+        $this->deleteJson("/api/backend/categories/{$drinks->id}")
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Move the 1 sub-category in Drinks to another parent first.');
+
+        $this->assertNotSoftDeleted($drinks);
     }
 
     public function test_empty_category_is_soft_deleted_and_hidden_from_the_api(): void

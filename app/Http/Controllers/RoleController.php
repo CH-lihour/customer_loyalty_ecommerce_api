@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\RoleRequest;
 use App\Models\Role;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class RoleController extends Controller
@@ -14,13 +15,15 @@ class RoleController extends Controller
      */
     public function index(): JsonResponse
     {
-        $roles = Role::with('permissions')->withCount('users')->orderBy('id')->get();
+        return $this->attempt('Could not load roles.', function (): JsonResponse {
+            $roles = Role::with('permissions')->withCount('users')->orderBy('id')->get();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Roles retrieved successfully',
-            'data' => $roles->map->toApiArray(),
-        ]);
+            return response()->json([
+                'success' => true,
+                'message' => 'Roles retrieved successfully',
+                'data' => $roles->map->toApiArray(),
+            ]);
+        });
     }
 
     /**
@@ -28,20 +31,26 @@ class RoleController extends Controller
      */
     public function store(RoleRequest $request): JsonResponse
     {
-        $data = $request->validated();
+        return $this->attempt('Could not create the role.', function () use ($request): JsonResponse {
+            $data = $request->validated();
 
-        $role = Role::create([
-            'code' => $this->uniqueCode($data['label']),
-            'label' => $data['label'],
-            'stock_authority' => $data['stock_authority'] ?? 'clerk',
-        ]);
-        $role->syncPages($data['pages'] ?? ['dashboard']);
+            $role = DB::transaction(function () use ($data): Role {
+                $role = Role::create([
+                    'code' => $this->uniqueCode($data['label']),
+                    'label' => $data['label'],
+                    'stock_authority' => $data['stock_authority'] ?? 'clerk',
+                ]);
+                $role->syncPages($data['pages'] ?? ['dashboard']);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Role created successfully',
-            'data' => $role->loadCount('users')->toApiArray(),
-        ], 201);
+                return $role;
+            });
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Role created successfully',
+                'data' => $role->loadCount('users')->toApiArray(),
+            ], 201);
+        });
     }
 
     /**
@@ -49,11 +58,11 @@ class RoleController extends Controller
      */
     public function show(Role $role): JsonResponse
     {
-        return response()->json([
+        return $this->attempt('Could not load the role.', fn (): JsonResponse => response()->json([
             'success' => true,
             'message' => 'Role retrieved successfully',
             'data' => $role->loadCount('users')->toApiArray(),
-        ]);
+        ]));
     }
 
     /**
@@ -61,22 +70,27 @@ class RoleController extends Controller
      */
     public function update(RoleRequest $request, Role $role): JsonResponse
     {
-        if ($role->isSuperAdmin()) {
-            return $this->superAdminIsFixed();
-        }
+        return $this->attempt('Could not update the role.', function () use ($request, $role): JsonResponse {
+            if ($role->isSuperAdmin()) {
+                return $this->superAdminIsFixed();
+            }
 
-        $data = $request->validated();
-        $role->update(collect($data)->except('pages')->all());
+            $data = $request->validated();
 
-        if (array_key_exists('pages', $data)) {
-            $role->syncPages($data['pages']);
-        }
+            DB::transaction(function () use ($data, $role): void {
+                $role->update(collect($data)->except('pages')->all());
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Role updated successfully',
-            'data' => $role->loadCount('users')->toApiArray(),
-        ]);
+                if (array_key_exists('pages', $data)) {
+                    $role->syncPages($data['pages'] ?? []);
+                }
+            });
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Role updated successfully',
+                'data' => $role->loadCount('users')->toApiArray(),
+            ]);
+        });
     }
 
     /**
@@ -84,25 +98,27 @@ class RoleController extends Controller
      */
     public function destroy(Role $role): JsonResponse
     {
-        if ($role->isSuperAdmin()) {
-            return $this->superAdminIsFixed();
-        }
+        return $this->attempt('Could not delete the role.', function () use ($role): JsonResponse {
+            if ($role->isSuperAdmin()) {
+                return $this->superAdminIsFixed();
+            }
 
-        $userCount = $role->users()->count();
+            $userCount = $role->users()->count();
 
-        if ($userCount > 0) {
+            if ($userCount > 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Move the {$userCount} staff ".str('user')->plural($userCount)." with the {$role->label} role to another role first.",
+                ], 422);
+            }
+
+            $role->delete();
+
             return response()->json([
-                'success' => false,
-                'message' => "Move the {$userCount} staff ".str('user')->plural($userCount)." with the {$role->label} role to another role first.",
-            ], 422);
-        }
-
-        $role->delete();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Role deleted successfully',
-        ]);
+                'success' => true,
+                'message' => 'Role deleted successfully',
+            ]);
+        });
     }
 
     /**
