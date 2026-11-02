@@ -5,6 +5,7 @@ use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\CustomerAuthController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\RoleController;
+use App\Http\Controllers\TierController;
 use App\Http\Controllers\UserController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -27,6 +28,8 @@ Route::prefix('backend')->group(function () {
         // Catalog setup
         Route::apiResource('categories', CategoryController::class)->middleware("can:access-page,'categories'");
         Route::apiResource('products', ProductController::class)->middleware("can:access-page,'products'");
+        // Loyalty setup
+        Route::apiResource('tiers', TierController::class)->middleware("can:access-page,'tiers'");
         // Staff accounts and role permissions (Super Admin only)
         Route::middleware('can:manage-staff')->group(function () {
             Route::apiResource('roles', RoleController::class);
