@@ -29,6 +29,7 @@ class DatabaseSeederTest extends TestCase
         $this->assertDatabaseCount('tiers', 4);
         $this->assertDatabaseCount('badges', 7);
         $this->assertDatabaseCount('rewards', 8);
+        $this->assertDatabaseCount('campaigns', 3);
         $this->assertSame(1, Customer::where('email', 'customer@example.com')->count());
     }
 }

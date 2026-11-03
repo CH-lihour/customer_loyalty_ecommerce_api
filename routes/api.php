@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BadgeController;
+use App\Http\Controllers\CampaignController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\CustomerAuthController;
 use App\Http\Controllers\ProductController;
@@ -33,6 +34,10 @@ Route::prefix('backend')->group(function () {
         // Loyalty setup
         Route::apiResource('tiers', TierController::class)->middleware("can:access-page,'tiers'");
         Route::apiResource('badges', BadgeController::class)->middleware("can:access-page,'badges'");
+        Route::middleware("can:access-page,'campaigns'")->group(function () {
+            Route::patch('campaigns/{campaign}/status', [CampaignController::class, 'updateStatus']);
+            Route::apiResource('campaigns', CampaignController::class);
+        });
         Route::middleware("can:access-page,'rewards'")->group(function () {
             Route::get('rewards/tier-options', [RewardController::class, 'tierOptions']);
             Route::patch('rewards/{reward}/status', [RewardController::class, 'updateStatus']);
@@ -47,6 +52,9 @@ Route::prefix('backend')->group(function () {
 });
 
 // Customer Side
+// Home-page banners, public so guests see them too
+Route::get('/campaigns/banners', [CampaignController::class, 'banners']);
+
 Route::post('/register', [CustomerAuthController::class, 'register']);
 Route::post('/login', [CustomerAuthController::class, 'login']);
 

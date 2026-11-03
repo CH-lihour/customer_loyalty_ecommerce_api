@@ -32,6 +32,7 @@ class DatabaseSeeder extends Seeder
             TierSeeder::class,
             BadgeSeeder::class,
             RewardSeeder::class,
+            CampaignSeeder::class,
             CustomerSeeder::class,
             CategorySeeder::class,
             ProductSeeder::class,
