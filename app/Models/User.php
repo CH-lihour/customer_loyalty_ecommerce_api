@@ -46,6 +46,34 @@ class User extends Authenticatable
     }
 
     /**
+     * The user's stock authority: "admin" for Super Admin, otherwise the role's level (clerk by default).
+     * Null when the role has no inventory page.
+     */
+    public function stockAuthority(): ?string
+    {
+        if ($this->isSuperAdmin()) {
+            return 'admin';
+        }
+
+        if (! array_intersect(Role::INVENTORY_PAGES, $this->role?->pages() ?? [])) {
+            return null;
+        }
+
+        return $this->role->stock_authority ?? 'clerk';
+    }
+
+    /**
+     * Whether the user's stock authority reaches the given level.
+     */
+    public function hasStockAuthority(string $level): bool
+    {
+        $authority = $this->stockAuthority();
+
+        return $authority !== null
+            && array_search($authority, Role::STOCK_AUTHORITIES, true) >= array_search($level, Role::STOCK_AUTHORITIES, true);
+    }
+
+    /**
      * Shape the user for API responses, with their role and pages.
      *
      * @return array{id: int, name: string, email: string, is_active: bool, role: array{id: int, code: string, label: string, stock_authority: string|null}|null, pages: list<string>}

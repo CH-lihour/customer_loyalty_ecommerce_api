@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Customer;
+use App\Models\RewardStockMovement;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -27,6 +28,10 @@ class DatabaseSeederTest extends TestCase
         $this->seed(DatabaseSeeder::class);
 
         $this->assertDatabaseCount('tiers', 4);
+        $this->assertDatabaseCount('rewards', 8);
+        $this->assertDatabaseCount('stock_locations', 3);
+        // Opening balances are only written once.
+        $this->assertSame(17, RewardStockMovement::count());
         $this->assertSame(1, Customer::where('email', 'customer@example.com')->count());
     }
 }

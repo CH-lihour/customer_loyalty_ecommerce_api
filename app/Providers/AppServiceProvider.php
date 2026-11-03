@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Models\User;
+use Illuminate\Auth\Access\Response;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Sanctum\PersonalAccessToken;
@@ -39,5 +40,11 @@ class AppServiceProvider extends ServiceProvider
 
         Gate::define('manage-staff', fn (User $user): bool => $user->isSuperAdmin());
         Gate::define('access-page', fn (User $user, string $page): bool => $user->canAccessPage($page));
+        Gate::define('access-stock', fn (User $user): Response => $user->stockAuthority()
+            ? Response::allow()
+            : Response::deny('Your role has no inventory access.'));
+        Gate::define('manage-stock', fn (User $user, string $level): Response => $user->hasStockAuthority($level)
+            ? Response::allow()
+            : Response::deny("This action needs stock {$level} authority."));
     }
 }

@@ -33,6 +33,20 @@ class Role extends Model
     ];
 
     /**
+     * The inventory pages; a role with any of them can work with reward stock.
+     *
+     * @var list<string>
+     */
+    public const INVENTORY_PAGES = ['stock-alerts', 'stock', 'stock-movements', 'fulfillment', 'stocktake', 'stock-reports', 'suppliers'];
+
+    /**
+     * Stock authority levels from lowest to highest. Super Admin is always "admin".
+     *
+     * @var list<string>
+     */
+    public const STOCK_AUTHORITIES = ['clerk', 'manager', 'admin'];
+
+    /**
      * Pages reserved for Super Admin, which other roles can never be given.
      *
      * @var list<string>
