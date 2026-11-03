@@ -5,6 +5,7 @@ use App\Http\Controllers\BadgeController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\CustomerAuthController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\RewardController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\TierController;
 use App\Http\Controllers\UserController;
@@ -32,6 +33,11 @@ Route::prefix('backend')->group(function () {
         // Loyalty setup
         Route::apiResource('tiers', TierController::class)->middleware("can:access-page,'tiers'");
         Route::apiResource('badges', BadgeController::class)->middleware("can:access-page,'badges'");
+        Route::middleware("can:access-page,'rewards'")->group(function () {
+            Route::get('rewards/tier-options', [RewardController::class, 'tierOptions']);
+            Route::patch('rewards/{reward}/status', [RewardController::class, 'updateStatus']);
+            Route::apiResource('rewards', RewardController::class);
+        });
         // Staff accounts and role permissions (Super Admin only)
         Route::middleware('can:manage-staff')->group(function () {
             Route::apiResource('roles', RoleController::class);
