@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\BadgeController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\CustomerAuthController;
 use App\Http\Controllers\ProductController;
@@ -30,6 +31,7 @@ Route::prefix('backend')->group(function () {
         Route::apiResource('products', ProductController::class)->middleware("can:access-page,'products'");
         // Loyalty setup
         Route::apiResource('tiers', TierController::class)->middleware("can:access-page,'tiers'");
+        Route::apiResource('badges', BadgeController::class)->middleware("can:access-page,'badges'");
         // Staff accounts and role permissions (Super Admin only)
         Route::middleware('can:manage-staff')->group(function () {
             Route::apiResource('roles', RoleController::class);
