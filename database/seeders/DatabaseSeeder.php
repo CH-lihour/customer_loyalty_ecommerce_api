@@ -34,6 +34,7 @@ class DatabaseSeeder extends Seeder
             RewardSeeder::class,
             CampaignSeeder::class,
             CustomerSeeder::class,
+            LoyaltyTransactionSeeder::class,
             CategorySeeder::class,
             ProductSeeder::class,
         ]);

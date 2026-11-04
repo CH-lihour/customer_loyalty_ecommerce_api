@@ -5,6 +5,7 @@ use App\Http\Controllers\BadgeController;
 use App\Http\Controllers\CampaignController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\CustomerAuthController;
+use App\Http\Controllers\PointController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\RewardController;
 use App\Http\Controllers\RoleController;
@@ -34,6 +35,12 @@ Route::prefix('backend')->group(function () {
         // Loyalty setup
         Route::apiResource('tiers', TierController::class)->middleware("can:access-page,'tiers'");
         Route::apiResource('badges', BadgeController::class)->middleware("can:access-page,'badges'");
+        // Points ledger: rows are only added, so it has no update or delete routes
+        Route::middleware("can:access-page,'points'")->prefix('points')->group(function () {
+            Route::get('transactions', [PointController::class, 'transactions']);
+            Route::get('customers', [PointController::class, 'customers']);
+            Route::post('adjustments', [PointController::class, 'adjust']);
+        });
         Route::middleware("can:access-page,'campaigns'")->group(function () {
             Route::patch('campaigns/{campaign}/status', [CampaignController::class, 'updateStatus']);
             Route::apiResource('campaigns', CampaignController::class);
@@ -69,4 +76,6 @@ Route::middleware('auth:customer')->group(function () {
             'data' => $request->user()->only(['id', 'name', 'email', 'phone', 'points_balance']),
         ]);
     });
+    // Own points history
+    Route::get('/points', [PointController::class, 'history']);
 });
