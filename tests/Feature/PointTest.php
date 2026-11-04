@@ -210,6 +210,11 @@ class PointTest extends TestCase
             ->assertOk()
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.reason', 'Mine');
+
+        $this->getJson('/api/profile')
+            ->assertOk()
+            ->assertJsonPath('data.points_balance', 100)
+            ->assertJsonPath('data.qualifying_points', 100);
     }
 
     public function test_customer_history_needs_a_customer_login(): void

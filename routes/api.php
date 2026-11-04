@@ -73,7 +73,7 @@ Route::middleware('auth:customer')->group(function () {
         return response()->json([
             'success' => true,
             'message' => 'Profile retrieved successfully',
-            'data' => $request->user()->only(['id', 'name', 'email', 'phone', 'points_balance']),
+            'data' => $request->user()->only(['id', 'name', 'email', 'phone', 'points_balance', 'qualifying_points']),
         ]);
     });
     // Own points history
