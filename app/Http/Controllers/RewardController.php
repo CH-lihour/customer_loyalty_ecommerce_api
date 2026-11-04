@@ -5,9 +5,11 @@ namespace App\Http\Controllers;
 use App\Http\Requests\RewardRequest;
 use App\Models\Reward;
 use App\Models\Tier;
+use App\Services\StockLedger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class RewardController extends Controller
@@ -16,6 +18,8 @@ class RewardController extends Controller
      * The minimum tier each reward is returned with.
      */
     private const RELATIONS = ['minTier:id,name'];
+
+    public function __construct(private StockLedger $ledger) {}
 
     /**
      * List a page of rewards with their minimum tier, optionally filtered by status.
@@ -31,7 +35,13 @@ class RewardController extends Controller
                 ->orderBy('id')
                 ->paginate($this->perPage($request));
 
-            return $this->paginatedResponse($rewards, 'Rewards retrieved successfully');
+            $available = $this->ledger->availableByReward();
+
+            return $this->paginatedResponse(
+                $rewards,
+                'Rewards retrieved successfully',
+                fn (Reward $reward): array => $this->withStock($reward, $available),
+            );
         });
     }
 
@@ -63,7 +73,7 @@ class RewardController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Reward created successfully',
-                'data' => $reward->refresh()->load(self::RELATIONS),
+                'data' => $this->withStock($reward->refresh()->load(self::RELATIONS)),
             ], 201);
         });
     }
@@ -76,7 +86,7 @@ class RewardController extends Controller
         return $this->attempt('Could not load the reward.', fn (): JsonResponse => response()->json([
             'success' => true,
             'message' => 'Reward retrieved successfully',
-            'data' => $reward->load(self::RELATIONS),
+            'data' => $this->withStock($reward->load(self::RELATIONS)),
         ]));
     }
 
@@ -98,7 +108,7 @@ class RewardController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Reward updated successfully',
-                'data' => $reward->load(self::RELATIONS),
+                'data' => $this->withStock($reward->load(self::RELATIONS)),
             ]);
         });
     }
@@ -114,7 +124,7 @@ class RewardController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => $reward->is_active ? 'Reward activated' : 'Reward deactivated',
-                'data' => $reward->load(self::RELATIONS),
+                'data' => $this->withStock($reward->load(self::RELATIONS)),
             ]);
         });
     }
@@ -140,6 +150,19 @@ class RewardController extends Controller
                 'message' => 'Reward deleted successfully',
             ]);
         });
+    }
+
+    /**
+     * Shape a reward for a response, with `stock` replayed from the ledger because levels are never stored.
+     *
+     * @param  Collection<int, int>|null  $available  Available units by reward id, when already replayed for a whole page.
+     * @return array<string, mixed>
+     */
+    private function withStock(Reward $reward, ?Collection $available = null): array
+    {
+        $available ??= $this->ledger->availableByReward($reward->id);
+
+        return [...$reward->toArray(), 'stock' => $available->get($reward->id, 0)];
     }
 
     /**

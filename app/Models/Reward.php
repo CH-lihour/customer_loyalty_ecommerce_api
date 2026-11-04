@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
-#[Fillable(['min_tier_id', 'name', 'name_kh', 'description', 'category', 'points_cost', 'stock', 'image', 'is_active', 'expires_at'])]
+#[Fillable(['min_tier_id', 'name', 'name_kh', 'description', 'category', 'points_cost', 'image', 'is_active', 'expires_at'])]
 #[Appends(['image_url'])]
 class Reward extends Model
 {

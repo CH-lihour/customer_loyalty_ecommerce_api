@@ -25,7 +25,6 @@ class RewardFactory extends Factory
             'description' => fake()->sentence(),
             'category' => fake()->randomElement(['Discount', 'Free Product', 'Shipping']),
             'points_cost' => fake()->numberBetween(1, 40) * 50,
-            'stock' => 0,
             'image' => null,
             'is_active' => true,
             'expires_at' => null,

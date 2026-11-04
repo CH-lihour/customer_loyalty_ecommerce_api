@@ -42,7 +42,7 @@ class RewardRequest extends FormRequest
             'description' => ['nullable', 'string', 'max:2000'],
             'category' => ['nullable', 'string', 'max:50'],
             'points_cost' => [$presence, 'integer', 'min:1', 'max:2000000000'],
-            'stock' => ['sometimes', 'integer', 'min:0', 'max:2000000000'],
+            'stock' => ['prohibited'],
             'image' => ['nullable', 'url:http,https', 'max:2048'],
             'image_file' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:'.self::MAX_IMAGE_KILOBYTES],
             'is_active' => ['sometimes', 'boolean'],
@@ -59,6 +59,7 @@ class RewardRequest extends FormRequest
     {
         return [
             'min_tier_id.exists' => 'Choose a minimum tier that exists.',
+            'stock.prohibited' => 'Stock comes from the ledger. Record a stock movement instead.',
             'image.url' => 'The image URL must start with http:// or https://.',
             'image_file.image' => 'The file must be an image.',
             'image_file.mimes' => 'Images must be JPG, PNG or WebP.',

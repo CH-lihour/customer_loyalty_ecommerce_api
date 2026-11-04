@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Reward;
+use App\Models\RewardStockItem;
+use App\Models\StockLocation;
 use App\Models\Tier;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -121,11 +123,51 @@ class RewardTest extends TestCase
         $this->postJson('/api/backend/rewards', [
             'min_tier_id' => 999,
             'points_cost' => 0,
-            'stock' => -1,
             'image' => 'not a url',
             'expires_at' => now()->subDay()->toDateString(),
         ])->assertUnprocessable()
-            ->assertJsonValidationErrors(['min_tier_id', 'name', 'points_cost', 'stock', 'image', 'expires_at' => 'cannot be in the past']);
+            ->assertJsonValidationErrors(['min_tier_id', 'name', 'points_cost', 'image', 'expires_at' => 'cannot be in the past']);
+    }
+
+    public function test_stock_is_what_the_ledger_has_available_at_active_locations(): void
+    {
+        $reward = RewardStockItem::factory()->batchTracked()->create()->reward;
+        Reward::factory()->create(['stock' => 99]);
+        $warehouse = StockLocation::factory()->create();
+        $closingStore = StockLocation::factory()->create();
+        $receive = fn (StockLocation $location, int $quantity, string $batch, string $expiresAt) => $this->postJson('/api/backend/stock-movements', [
+            'type' => 'receive',
+            'reward_id' => $reward->id,
+            'location_id' => $location->id,
+            'quantity' => $quantity,
+            'source' => 'PURCHASE',
+            'unit_cost' => 2,
+            'batch' => $batch,
+            'expires_at' => $expiresAt,
+        ])->assertCreated();
+
+        $receive($warehouse, 6, 'FRESH', now()->addMonth()->toDateString());
+        $receive($warehouse, 4, 'EXPIRED', now()->subDay()->toDateString());
+        $receive($closingStore, 3, 'CLOSING', now()->addMonth()->toDateString());
+        $closingStore->update(['is_active' => false]);
+
+        $this->getJson('/api/backend/rewards')
+            ->assertOk()
+            ->assertJsonPath('data.0.stock', 6)
+            ->assertJsonPath('data.1.stock', 0);
+
+        $this->getJson("/api/backend/rewards/{$reward->id}")
+            ->assertOk()
+            ->assertJsonPath('data.stock', 6);
+    }
+
+    public function test_stock_cannot_be_set_on_a_reward(): void
+    {
+        $reward = Reward::factory()->create();
+
+        $this->patchJson("/api/backend/rewards/{$reward->id}", ['stock' => 50])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['stock' => 'Record a stock movement instead.']);
     }
 
     public function test_an_expired_reward_can_be_edited_without_moving_its_date(): void

@@ -100,6 +100,22 @@ class StockLedger
     }
 
     /**
+     * The units available per reward at active locations, keyed by reward id. Rewards with no stock are left out.
+     * Matches the frontend's `availableFor`.
+     *
+     * @return Collection<int, int>
+     */
+    public function availableByReward(?int $rewardId = null): Collection
+    {
+        $activeLocationIds = StockLocation::where('is_active', true)->pluck('id');
+
+        return $this->levels($rewardId)
+            ->whereIn('location_id', $activeLocationIds)
+            ->groupBy('reward_id')
+            ->map(fn (Collection $levels): int => $levels->sum('available'));
+    }
+
+    /**
      * The level key for a reward, variant and location.
      */
     public static function key(int $rewardId, ?int $variantId, int $locationId): string
