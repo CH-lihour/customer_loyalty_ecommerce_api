@@ -48,12 +48,13 @@ class StockTest extends TestCase
 
     public function test_snapshot_lists_rewards_with_default_stock_rules_and_the_ledger(): void
     {
-        $reward = Reward::factory()->create(['name' => 'Silk Krama']);
+        $reward = Reward::factory()->create(['name' => 'Silk Krama', 'image' => 'rewards/krama.png']);
         $this->move('receive', $reward, ['quantity' => 12, 'reference' => 'PO-1'])->assertCreated();
 
         $this->getJson('/api/backend/stock')
             ->assertOk()
             ->assertJsonPath('data.rewards.0.name', 'Silk Krama')
+            ->assertJsonPath('data.rewards.0.image_url', url('storage/rewards/krama.png'))
             ->assertJsonPath('data.rewards.0.stock_item.sku', "RW-{$reward->id}")
             ->assertJsonPath('data.rewards.0.stock_item.tracking', 'none')
             ->assertJsonCount(2, 'data.locations')

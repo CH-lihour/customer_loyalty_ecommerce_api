@@ -24,7 +24,7 @@ class StockController extends Controller
             'data' => [
                 'rewards' => Reward::query()->with(['minTier:id,name', 'stockItem', 'variants'])->orderBy('id')->get()
                     ->map(fn (Reward $reward) => [
-                        ...$reward->only(['id', 'name', 'name_kh', 'description', 'category', 'points_cost', 'image', 'is_active']),
+                        ...$reward->only(['id', 'name', 'name_kh', 'description', 'category', 'points_cost', 'image', 'image_url', 'is_active']),
                         'min_tier' => $reward->minTier?->name,
                         'stock_item' => $reward->stockSettings()->toApiArray(),
                         'variants' => $reward->variants->map(fn (RewardVariant $variant) => $variant->only(['id', 'size', 'color', 'sku']))->values(),
