@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StockMovementRequest;
 use App\Models\RewardStockMovement;
+use App\Services\RedemptionService;
 use App\Services\StockLedger;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -59,19 +60,24 @@ class StockMovementController extends Controller
     /**
      * Record a receive, transfer, return, adjustment or write-off. Adjustments and write-offs need stock manager authority.
      */
-    public function store(StockMovementRequest $request, StockLedger $ledger): JsonResponse
+    public function store(StockMovementRequest $request, StockLedger $ledger, RedemptionService $redemptions): JsonResponse
     {
-        return $this->attempt('Could not record the stock movement.', function () use ($request, $ledger): JsonResponse {
+        return $this->attempt('Could not record the stock movement.', function () use ($request, $ledger, $redemptions): JsonResponse {
             $input = $request->validated();
             Gate::authorize('manage-stock', StockMovementRequest::AUTHORITY[$input['type']]);
             $actor = $request->user();
 
-            $movements = DB::transaction(fn () => match ($input['type']) {
-                'receive' => $ledger->receive($actor, $input),
-                'adjust' => $ledger->adjust($actor, $input),
-                'transfer' => $ledger->transfer($actor, $input),
-                'writeoff' => $ledger->writeOff($actor, $input),
-                'return' => $ledger->return($actor, $input),
+            $movements = DB::transaction(function () use ($input, $actor, $ledger, $redemptions) {
+                $movements = match ($input['type']) {
+                    'receive' => $ledger->receive($actor, $input),
+                    'adjust' => $ledger->adjust($actor, $input),
+                    'transfer' => $ledger->transfer($actor, $input),
+                    'writeoff' => $ledger->writeOff($actor, $input),
+                    'return' => isset($input['redemption_id']) ? $redemptions->returnToStock($actor, $input) : $ledger->return($actor, $input),
+                };
+                $redemptions->settle();
+
+                return $movements;
             });
 
             return response()->json([

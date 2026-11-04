@@ -8,11 +8,34 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Laravel\Sanctum\PersonalAccessToken;
 
 class AuthController extends Controller
 {
+    /**
+     * Update the signed-in staff user's own name and email.
+     */
+    public function updateProfile(Request $request): JsonResponse
+    {
+        return $this->attempt('Could not update your profile.', function () use ($request): JsonResponse {
+            $user = $request->user();
+            $data = $request->validate([
+                'name' => ['required', 'string', 'max:255'],
+                'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user)],
+            ]);
+
+            $user->update($data);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Profile updated successfully',
+                'data' => $user->load('role.permissions')->toApiArray(),
+            ]);
+        });
+    }
+
     /**
      * Authenticate a user and issue a Sanctum API token.
      */

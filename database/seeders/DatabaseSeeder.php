@@ -37,7 +37,10 @@ class DatabaseSeeder extends Seeder
             LoyaltyTransactionSeeder::class,
             CategorySeeder::class,
             ProductSeeder::class,
+            InventorySeeder::class,
             StockSeeder::class,
+            ReferralSeeder::class,
+            OrderSeeder::class,
         ]);
     }
 }

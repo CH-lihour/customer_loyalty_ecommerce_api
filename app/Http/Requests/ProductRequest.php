@@ -51,6 +51,7 @@ class ProductRequest extends FormRequest
             'normal_points' => ['sometimes', 'integer', 'min:0'],
             'bonus_multiplier' => ['sometimes', 'numeric', 'min:1', 'max:999.99'],
             'is_featured' => ['sometimes', 'boolean'],
+            'stock' => ['sometimes', 'integer', 'min:0', 'max:1000000'],
         ];
     }
 

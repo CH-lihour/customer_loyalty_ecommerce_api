@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\ProductRequest;
 use App\Models\Product;
+use App\Services\ProductStock;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,14 +17,14 @@ class ProductController extends Controller
      *
      * @var list<string>
      */
-    private const RELATIONS = ['category:id,name,name_kh,is_active', 'images'];
+    private const RELATIONS = ['category:id,name,name_kh,is_active', 'images', 'inventories'];
 
     /**
-     * Request fields that are handled as image changes rather than product columns.
+     * Request fields that are handled separately rather than saved as product columns.
      *
      * @var list<string>
      */
-    private const IMAGE_FIELDS = ['images', 'remove_image_ids'];
+    private const NON_COLUMN_FIELDS = ['images', 'remove_image_ids', 'stock'];
 
     /**
      * List a page of products with their category and images, optionally filtered by category, search term or featured flag.
@@ -59,15 +60,16 @@ class ProductController extends Controller
     /**
      * Create a product with any uploaded images, generating a SKU when none is given.
      */
-    public function store(ProductRequest $request): JsonResponse
+    public function store(ProductRequest $request, ProductStock $stock): JsonResponse
     {
-        return $this->attempt('Could not create the product.', function () use ($request): JsonResponse {
-            $product = DB::transaction(function () use ($request): Product {
+        return $this->attempt('Could not create the product.', function () use ($request, $stock): JsonResponse {
+            $product = DB::transaction(function () use ($request, $stock): Product {
                 $product = Product::create([
                     'sku' => 'PRD-'.Str::upper(Str::random(8)),
-                    ...$request->safe()->except(self::IMAGE_FIELDS),
+                    ...$request->safe()->except(self::NON_COLUMN_FIELDS),
                 ]);
                 $product->addImages($request->file('images') ?? []);
+                $stock->set($product, $request->validated('stock') ?? 0);
 
                 return $product;
             });
@@ -93,16 +95,21 @@ class ProductController extends Controller
     }
 
     /**
-     * Update a product. `remove_image_ids` deletes images; `images` uploads more after the existing ones.
+     * Update a product. `remove_image_ids` deletes images; `images` uploads more after the existing ones;
+     * `stock` sets how many can be sold.
      * Send files as multipart POST with `_method=PATCH`, since PHP does not read multipart PATCH bodies.
      */
-    public function update(ProductRequest $request, Product $product): JsonResponse
+    public function update(ProductRequest $request, Product $product, ProductStock $stock): JsonResponse
     {
-        return $this->attempt('Could not update the product.', function () use ($request, $product): JsonResponse {
-            DB::transaction(function () use ($request, $product): void {
-                $product->update($request->safe()->except(self::IMAGE_FIELDS));
+        return $this->attempt('Could not update the product.', function () use ($request, $product, $stock): JsonResponse {
+            DB::transaction(function () use ($request, $product, $stock): void {
+                $product->update($request->safe()->except(self::NON_COLUMN_FIELDS));
                 $product->removeImages($request->input('remove_image_ids') ?? []);
                 $product->addImages($request->file('images') ?? []);
+
+                if ($request->has('stock')) {
+                    $stock->set($product, $request->validated('stock'));
+                }
             });
 
             return response()->json([

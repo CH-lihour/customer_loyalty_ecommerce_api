@@ -3,7 +3,10 @@
 namespace App\Models;
 
 use Database\Factories\ProductFactory;
+use Illuminate\Database\Eloquent\Attributes\Appends;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,6 +18,8 @@ use Illuminate\Http\UploadedFile;
     'category_id', 'name', 'name_kh', 'sku', 'description', 'price', 'cost_price',
     'reorder_level', 'normal_points', 'bonus_multiplier', 'is_featured',
 ])]
+#[Appends(['stock'])]
+#[Hidden(['inventories'])]
 class Product extends Model
 {
     /** @use HasFactory<ProductFactory> */
@@ -24,6 +29,24 @@ class Product extends Model
      * The most images a product can have.
      */
     public const MAX_IMAGES = 8;
+
+    /**
+     * Get the product's stock in each warehouse.
+     *
+     * @return HasMany<Inventory, $this>
+     */
+    public function inventories(): HasMany
+    {
+        return $this->hasMany(Inventory::class);
+    }
+
+    /**
+     * The units that can be sold across every warehouse.
+     */
+    protected function stock(): Attribute
+    {
+        return Attribute::get(fn (): int => $this->inventories->sum(fn (Inventory $inventory): int => $inventory->available()));
+    }
 
     /**
      * Get the product's images; the first is the cover.

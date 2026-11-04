@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Redemption;
 use App\Models\Reward;
 use App\Models\RewardStockItem;
 use App\Models\RewardStockMovement;
@@ -113,6 +114,82 @@ class StockLedger
             ->whereIn('location_id', $activeLocationIds)
             ->groupBy('reward_id')
             ->map(fn (Collection $levels): int => $levels->sum('available'));
+    }
+
+    /**
+     * The units available for each reward and variant at active locations, keyed "reward|variant".
+     *
+     * @return Collection<string, int>
+     */
+    public function availability(): Collection
+    {
+        $activeLocationIds = StockLocation::where('is_active', true)->pluck('id');
+
+        return $this->levels()
+            ->whereIn('location_id', $activeLocationIds)
+            ->groupBy(fn (array $level): string => "{$level['reward_id']}|{$level['variant_id']}")
+            ->map(fn (Collection $levels): int => $levels->sum('available'));
+    }
+
+    /**
+     * The active location with the most units available for a reward and variant, if any has some.
+     */
+    public function bestLocation(int $rewardId, ?int $variantId): ?int
+    {
+        $levels = $this->levels($rewardId);
+
+        return StockLocation::where('is_active', true)->pluck('id')
+            ->mapWithKeys(fn (int $id): array => [$id => $levels->get(self::key($rewardId, $variantId, $id))['available'] ?? 0])
+            ->filter()
+            ->sortDesc()
+            ->keys()
+            ->first();
+    }
+
+    /**
+     * Reserve a unit for a redemption ("RESERVE") or let it go ("RELEASE"). On-hand stock does not change.
+     */
+    public function hold(Redemption $redemption, string $type, string $reason, ?User $actor = null): void
+    {
+        $reward = Reward::query()->with('stockItem')->findOrFail($redemption->reward_id);
+
+        $this->record($actor, $reward->stockSettings(), [
+            'type' => $type,
+            'reward_id' => $redemption->reward_id,
+            'variant_id' => $redemption->variant_id,
+            'location_id' => $redemption->location_id,
+            'reference' => $redemption->reference(),
+            'reason' => $reason,
+        ], [['qty' => 0]], 1, $type === 'RESERVE' ? 1 : -1);
+    }
+
+    /**
+     * Take a redemption's reserved unit out of stock, returning the batch or serial it came from.
+     *
+     * @return StockPart
+     */
+    public function fulfill(User $actor, Redemption $redemption, string $reason, ?string $serial = null): array
+    {
+        $line = [
+            'reward_id' => $redemption->reward_id,
+            'variant_id' => $redemption->variant_id,
+            'location_id' => $redemption->location_id,
+            'quantity' => 1,
+            'serials' => $serial ? [$serial] : [],
+        ];
+        [, $item] = $this->checkLine($line, needActiveLocation: false);
+        $parts = $this->resolveOut($this->levelFor($line), $item, $line, 'reserved');
+
+        $this->record($actor, $item, [
+            'type' => 'FULFILL',
+            'reward_id' => $redemption->reward_id,
+            'variant_id' => $redemption->variant_id,
+            'location_id' => $redemption->location_id,
+            'reference' => $redemption->reference(),
+            'reason' => $reason,
+        ], $parts, -1, -1);
+
+        return $parts[0];
     }
 
     /**
@@ -259,12 +336,12 @@ class StockLedger
      * @param  list<StockPart>  $parts
      * @return Collection<int, RewardStockMovement>
      */
-    public function record(User $actor, RewardStockItem $item, array $base, array $parts, int $sign, int $reservedDelta = 0): Collection
+    public function record(?User $actor, RewardStockItem $item, array $base, array $parts, int $sign, int $reservedDelta = 0): Collection
     {
         return collect($parts)->map(fn (array $part) => RewardStockMovement::create([
             'unit_cost' => $item->unit_cost ?? 0,
             ...$base,
-            'actor_id' => $actor->id,
+            'actor_id' => $actor?->id,
             'on_hand_delta' => $sign * $part['qty'],
             'reserved_delta' => $reservedDelta,
             'batch' => $part['batch'] ?? null,
@@ -358,6 +435,7 @@ class StockLedger
     /**
      * Work out the batches or serials for stock going out.
      * "available": unreserved, unexpired stock (or a chosen expired batch). "expired": expired batches only.
+     * "reserved": a unit already held for a redemption, so reservations do not count against it.
      *
      * @param  StockLevel|null  $level
      * @param  StockLine  $line
@@ -389,6 +467,10 @@ class StockLedger
                     $this->fail("Batch {$chosen} has not expired.", 'batch');
                 }
 
+                if ($mode === 'reserved' && $expired) {
+                    $this->fail("Batch {$chosen} has expired.", 'batch');
+                }
+
                 if ($mode === 'available' && ! $expired && $qty > $level['available']) {
                     $this->fail($unreserved());
                 }
@@ -408,12 +490,18 @@ class StockLedger
             $this->fail('This item does not track expiry dates.');
         }
 
-        if ($qty > $level['available']) {
-            $this->fail("Only {$level['available']} ".Str::plural('unit', $level['available']).' available here.');
+        $capacity = $mode === 'reserved' ? $level['on_hand'] - $level['expired'] : $level['available'];
+
+        if ($qty > $capacity) {
+            $this->fail("Only {$capacity} ".Str::plural('unit', $capacity).' available here.');
         }
 
         if ($item->tracking === 'serial') {
             $serials = self::normalizeSerials($line['serials'] ?? []);
+
+            if (! $serials && $mode === 'reserved') {
+                $serials = array_slice($level['serials'], 0, $qty);
+            }
 
             if (count($serials) !== $qty) {
                 $this->fail("Choose {$qty} serial ".Str::plural('number', $qty).'.', 'serials');

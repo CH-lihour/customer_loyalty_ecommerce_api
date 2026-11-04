@@ -2,23 +2,40 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Redemption;
+use App\Models\RestockRequest;
 use App\Models\Reward;
 use App\Models\RewardStockMovement;
 use App\Models\RewardVariant;
+use App\Models\Setting;
 use App\Models\StockLocation;
 use App\Models\Stocktake;
 use App\Models\Supplier;
+use App\Services\RedemptionService;
 use Illuminate\Http\JsonResponse;
 
 class StockController extends Controller
 {
     /**
      * Everything the inventory pages work from: rewards with their stock settings and variants, locations,
-     * suppliers, the full ledger (newest first) and stocktakes. Levels, alerts and reports are replayed from the ledger.
+     * suppliers, the full ledger (newest first), stocktakes, redemptions waiting on stock and customers' restock
+     * requests. Levels, alerts and reports are replayed from the ledger.
      */
-    public function index(): JsonResponse
+    public function index(RedemptionService $redemptions): JsonResponse
     {
-        return $this->attempt('Could not load stock.', fn (): JsonResponse => response()->json([
+        return $this->attempt('Could not load stock.', function () use ($redemptions): JsonResponse {
+            $redemptions->expireOverdue();
+
+            return $this->snapshot();
+        });
+    }
+
+    /**
+     * Build the snapshot response.
+     */
+    private function snapshot(): JsonResponse
+    {
+        return response()->json([
             'success' => true,
             'message' => 'Stock retrieved successfully',
             'data' => [
@@ -35,7 +52,12 @@ class StockController extends Controller
                     ->map(fn (RewardStockMovement $movement) => $movement->toApiArray()),
                 'stocktakes' => Stocktake::query()->with(['lines', 'creator:id,name', 'poster:id,name'])->latest('id')->get()
                     ->map(fn (Stocktake $stocktake) => $stocktake->toApiArray()),
+                'redemptions' => Redemption::query()->with(Redemption::RELATIONS)->latest('id')->get()
+                    ->map(fn (Redemption $redemption) => $redemption->toApiArray()),
+                'restock_requests' => RestockRequest::query()->latest('id')->get()
+                    ->map(fn (RestockRequest $restockRequest) => $restockRequest->toApiArray()),
+                'reservation_hours' => Setting::integer(Setting::RESERVATION_HOURS),
             ],
-        ]));
+        ]);
     }
 }

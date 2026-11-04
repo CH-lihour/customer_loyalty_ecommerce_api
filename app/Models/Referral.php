@@ -35,6 +35,24 @@ class Referral extends Model
     }
 
     /**
+     * Shape the referral for API responses.
+     *
+     * @return array{id: int, referrer_id: int, referrer_name: string|null, referred_id: int, referred_name: string|null, completed: bool, created_at: string|null}
+     */
+    public function toApiArray(): array
+    {
+        return [
+            'id' => $this->id,
+            'referrer_id' => $this->referrer_id,
+            'referrer_name' => $this->referrer?->name,
+            'referred_id' => $this->referred_id,
+            'referred_name' => $this->referred?->name,
+            'completed' => $this->is_completed,
+            'created_at' => $this->created_at?->toDateString(),
+        ];
+    }
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>

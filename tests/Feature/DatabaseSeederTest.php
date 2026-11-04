@@ -33,6 +33,10 @@ class DatabaseSeederTest extends TestCase
         $this->assertDatabaseCount('campaigns', 3);
         $this->assertDatabaseCount('loyalty_transactions', 12);
         $this->assertDatabaseCount('stock_locations', 3);
+        // Stock and the demo orders and referrals are only seeded once.
+        $this->assertDatabaseCount('inventories', 12);
+        $this->assertDatabaseCount('orders', 6);
+        $this->assertDatabaseCount('referrals', 3);
         // Opening balances are only written once.
         $this->assertSame(17, RewardStockMovement::count());
         $this->assertSame(1, Customer::where('email', 'customer@example.com')->count());

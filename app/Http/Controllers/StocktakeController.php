@@ -6,6 +6,7 @@ use App\Models\Reward;
 use App\Models\StockLocation;
 use App\Models\Stocktake;
 use App\Models\StocktakeLine;
+use App\Services\RedemptionService;
 use App\Services\StockLedger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -118,9 +119,9 @@ class StocktakeController extends Controller
     /**
      * Post a fully counted stocktake: each line's difference from the current system quantity becomes a COUNT entry.
      */
-    public function post(Request $request, Stocktake $stocktake, StockLedger $ledger): JsonResponse
+    public function post(Request $request, Stocktake $stocktake, StockLedger $ledger, RedemptionService $redemptions): JsonResponse
     {
-        return $this->attempt('Could not post the stocktake.', function () use ($request, $stocktake, $ledger): JsonResponse {
+        return $this->attempt('Could not post the stocktake.', function () use ($request, $stocktake, $ledger, $redemptions): JsonResponse {
             if ($stocktake->status !== Stocktake::OPEN) {
                 return $this->rejected('Only open stocktakes can be posted.');
             }
@@ -131,7 +132,7 @@ class StocktakeController extends Controller
                 return $this->rejected('Count every line before posting.');
             }
 
-            return DB::transaction(function () use ($request, $stocktake, $ledger): JsonResponse {
+            return DB::transaction(function () use ($request, $stocktake, $ledger, $redemptions): JsonResponse {
                 $levels = $ledger->levels();
                 $rewards = Reward::query()->with('stockItem')->whereIn('id', $stocktake->lines->pluck('reward_id'))->lockForUpdate()->get()->keyBy('id');
                 $variances = [];
@@ -169,6 +170,7 @@ class StocktakeController extends Controller
                 }
 
                 $stocktake->update(['status' => Stocktake::POSTED, 'posted_by' => $request->user()->id, 'posted_at' => now()]);
+                $redemptions->settle();
 
                 return response()->json([
                     'success' => true,

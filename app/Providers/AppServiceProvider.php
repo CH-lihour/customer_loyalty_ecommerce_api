@@ -40,6 +40,7 @@ class AppServiceProvider extends ServiceProvider
 
         Gate::define('manage-staff', fn (User $user): bool => $user->isSuperAdmin());
         Gate::define('access-page', fn (User $user, string $page): bool => $user->canAccessPage($page));
+        Gate::define('access-any-page', fn (User $user, string ...$pages): bool => array_any($pages, fn (string $page): bool => $user->canAccessPage($page)));
         Gate::define('access-stock', fn (User $user): Response => $user->stockAuthority()
             ? Response::allow()
             : Response::deny('Your role has no inventory access.'));

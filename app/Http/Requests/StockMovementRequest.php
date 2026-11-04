@@ -49,6 +49,8 @@ class StockMovementRequest extends FormRequest
             'serials' => ['nullable', 'array', 'max:1000'],
             'serials.*' => ['string', 'max:64'],
             'reference' => ['nullable', 'string', 'max:64'],
+            'redemption_id' => ['nullable', 'integer', Rule::exists('redemptions', 'id')],
+            'refund_points' => ['sometimes', 'boolean'],
             'reason' => [in_array($type, ['adjust', 'writeoff', 'return'], true) ? 'required' : 'nullable', 'string', 'max:255'],
             'source' => [Rule::requiredIf($type === 'receive'), Rule::in(['PURCHASE', 'DONATION'])],
             'supplier_id' => ['nullable', 'integer', Rule::exists('suppliers', 'id')],
