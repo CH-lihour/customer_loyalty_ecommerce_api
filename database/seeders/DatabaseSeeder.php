@@ -30,7 +30,11 @@ class DatabaseSeeder extends Seeder
 
         $this->call([
             TierSeeder::class,
+            BadgeSeeder::class,
+            RewardSeeder::class,
+            CampaignSeeder::class,
             CustomerSeeder::class,
+            LoyaltyTransactionSeeder::class,
             CategorySeeder::class,
             ProductSeeder::class,
             StockSeeder::class,

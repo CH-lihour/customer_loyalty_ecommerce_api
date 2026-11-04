@@ -28,6 +28,7 @@ class RewardFactory extends Factory
             'stock' => 0,
             'image' => null,
             'is_active' => true,
+            'expires_at' => null,
         ];
     }
 

@@ -28,7 +28,10 @@ class DatabaseSeederTest extends TestCase
         $this->seed(DatabaseSeeder::class);
 
         $this->assertDatabaseCount('tiers', 4);
+        $this->assertDatabaseCount('badges', 7);
         $this->assertDatabaseCount('rewards', 8);
+        $this->assertDatabaseCount('campaigns', 3);
+        $this->assertDatabaseCount('loyalty_transactions', 12);
         $this->assertDatabaseCount('stock_locations', 3);
         // Opening balances are only written once.
         $this->assertSame(17, RewardStockMovement::count());
