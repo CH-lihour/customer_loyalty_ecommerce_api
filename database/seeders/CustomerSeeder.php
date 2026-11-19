@@ -18,6 +18,7 @@ class CustomerSeeder extends Seeder
         Customer::updateOrCreate(['email' => 'customer@example.com'], [
             'tier_id' => $tiers->first()->id,
             'name' => 'Test Customer',
+            'email_verified_at' => now(),
             'phone' => '012345678',
             'password' => 'password',
             'referral_code' => 'TESTCUST',

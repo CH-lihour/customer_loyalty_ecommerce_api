@@ -29,11 +29,22 @@ class CustomerFactory extends Factory
             'tier_id' => Tier::factory(),
             'name' => fake()->name(),
             'email' => fake()->unique()->safeEmail(),
+            'email_verified_at' => now(),
             'phone' => fake()->phoneNumber(),
             'password' => static::$password ??= Hash::make('password'),
             'referral_code' => Str::upper(Str::random(8)),
             'is_active' => true,
         ];
+    }
+
+    /**
+     * Indicate that the customer has not confirmed their email code yet.
+     */
+    public function unverified(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'email_verified_at' => null,
+        ]);
     }
 
     /**

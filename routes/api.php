@@ -63,6 +63,10 @@ Route::prefix('backend')->group(function () {
 Route::get('/campaigns/banners', [CampaignController::class, 'banners']);
 
 Route::post('/register', [CustomerAuthController::class, 'register']);
+Route::middleware('throttle:10,1')->group(function () {
+    Route::post('/register/verify', [CustomerAuthController::class, 'verifyOtp']);
+    Route::post('/register/resend', [CustomerAuthController::class, 'resendOtp']);
+});
 Route::post('/login', [CustomerAuthController::class, 'login']);
 
 Route::middleware('auth:customer')->group(function () {
