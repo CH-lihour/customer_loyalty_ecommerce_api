@@ -45,6 +45,16 @@ class Customer extends Authenticatable
     }
 
     /**
+     * Get the referrals of customers who signed up with this customer's code.
+     *
+     * @return HasMany<Referral, $this>
+     */
+    public function referralsMade(): HasMany
+    {
+        return $this->hasMany(Referral::class, 'referrer_id');
+    }
+
+    /**
      * Get the email code waiting to be confirmed, if any.
      *
      * @return HasOne<CustomerOtp, $this>

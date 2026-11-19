@@ -7,6 +7,7 @@ use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\CustomerAuthController;
 use App\Http\Controllers\PointController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\ReferralController;
 use App\Http\Controllers\RewardController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\TierController;
@@ -40,6 +41,11 @@ Route::prefix('backend')->group(function () {
             Route::get('transactions', [PointController::class, 'transactions']);
             Route::get('customers', [PointController::class, 'customers']);
             Route::post('adjustments', [PointController::class, 'adjust']);
+        });
+        // Referrals: staff mark one converted until orders can do it
+        Route::middleware("can:access-page,'referrals'")->group(function () {
+            Route::get('referrals', [ReferralController::class, 'index']);
+            Route::patch('referrals/{referral}/complete', [ReferralController::class, 'complete']);
         });
         Route::middleware("can:access-page,'campaigns'")->group(function () {
             Route::patch('campaigns/{campaign}/status', [CampaignController::class, 'updateStatus']);
@@ -77,9 +83,11 @@ Route::middleware('auth:customer')->group(function () {
         return response()->json([
             'success' => true,
             'message' => 'Profile retrieved successfully',
-            'data' => $request->user()->only(['id', 'name', 'email', 'phone', 'points_balance', 'qualifying_points']),
+            'data' => $request->user()->only(['id', 'name', 'email', 'phone', 'referral_code', 'points_balance', 'qualifying_points']),
         ]);
     });
     // Own points history
     Route::get('/points', [PointController::class, 'history']);
+    // Own referral code and the friends who joined with it
+    Route::get('/referrals', [ReferralController::class, 'mine']);
 });
