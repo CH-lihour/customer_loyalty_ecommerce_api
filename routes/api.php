@@ -5,6 +5,7 @@ use App\Http\Controllers\BadgeController;
 use App\Http\Controllers\CampaignController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\CustomerAuthController;
+use App\Http\Controllers\KhqrPaymentController;
 use App\Http\Controllers\PointController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ReferralController;
@@ -90,4 +91,10 @@ Route::middleware('auth:customer')->group(function () {
     Route::get('/points', [PointController::class, 'history']);
     // Own referral code and the friends who joined with it
     Route::get('/referrals', [ReferralController::class, 'mine']);
+    // Demo KHQR checkout payment: make a code, check it, and pretend to pay it
+    Route::prefix('payments/khqr')->group(function () {
+        Route::post('/', [KhqrPaymentController::class, 'store']);
+        Route::get('{md5}', [KhqrPaymentController::class, 'show']);
+        Route::post('{md5}/simulate', [KhqrPaymentController::class, 'simulate']);
+    });
 });

@@ -35,4 +35,15 @@ return [
         ],
     ],
 
+    // Demo-only KHQR (Bakong) checkout. Nothing is charged; the account below is made up and cannot receive money.
+    'khqr' => [
+        'account_id' => env('KHQR_ACCOUNT_ID', 'khmer_shop_demo@demo'),
+        'merchant_name' => env('KHQR_MERCHANT_NAME', 'Khmer Shop'),
+        'merchant_city' => env('KHQR_MERCHANT_CITY', 'Phnom Penh'),
+        // Seconds a code can be paid before it expires.
+        'lifetime' => (int) env('KHQR_LIFETIME', 180),
+        // Allows the "Simulate payment" button. Off in production unless set.
+        'simulate' => (bool) env('KHQR_SIMULATE', env('APP_ENV') !== 'production'),
+    ],
+
 ];
