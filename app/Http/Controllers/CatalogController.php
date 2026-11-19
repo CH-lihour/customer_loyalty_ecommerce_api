@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Category;
 use App\Models\Product;
+use App\Models\Reward;
 use App\Models\Tier;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -11,7 +12,7 @@ use Illuminate\Http\Request;
 
 /**
  * The storefront's read-only catalog, open to guests: active categories and the products in them, without
- * staff-only fields such as cost price, and the membership tiers. Pages have the same shape as the staff lists.
+ * staff-only fields such as cost price, the membership tiers and the rewards points can be spent on. Pages have the same shape as the staff lists.
  */
 class CatalogController extends Controller
 {
@@ -67,6 +68,25 @@ class CatalogController extends Controller
                 ->paginate($this->perPage($request));
 
             return $this->paginatedResponse($tiers, 'Tiers retrieved successfully');
+        });
+    }
+
+    /**
+     * List a page of the rewards customers can redeem now: active and not expired, cheapest first, with the tier
+     * each one needs and how many are left.
+     */
+    public function rewards(Request $request): JsonResponse
+    {
+        return $this->attempt('Could not load rewards.', function () use ($request): JsonResponse {
+            $rewards = Reward::query()
+                ->with('minTier:id,name,min_points')
+                ->where('is_active', true)
+                ->where(fn (Builder $query) => $query->whereNull('expires_at')->orWhereDate('expires_at', '>=', today()))
+                ->orderBy('points_cost')
+                ->orderBy('id')
+                ->paginate($this->perPage($request));
+
+            return $this->paginatedResponse($rewards, 'Rewards retrieved successfully');
         });
     }
 }

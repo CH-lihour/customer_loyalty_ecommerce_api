@@ -55,6 +55,16 @@ class Customer extends Authenticatable
     }
 
     /**
+     * Get the rewards the customer redeemed.
+     *
+     * @return HasMany<Redemption, $this>
+     */
+    public function redemptions(): HasMany
+    {
+        return $this->hasMany(Redemption::class);
+    }
+
+    /**
      * Get the referral made when this customer signed up with someone's code, if any.
      *
      * @return HasOne<Referral, $this>

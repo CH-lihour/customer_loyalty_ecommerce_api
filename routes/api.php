@@ -1,16 +1,20 @@
 <?php
 
+use App\Http\Controllers\AdminCustomerController;
 use App\Http\Controllers\AdminOrderController;
+use App\Http\Controllers\AdminRedemptionController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BadgeController;
 use App\Http\Controllers\CampaignController;
 use App\Http\Controllers\CatalogController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\CustomerAuthController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\KhqrPaymentController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\PointController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\RedemptionController;
 use App\Http\Controllers\ReferralController;
 use App\Http\Controllers\RewardController;
 use App\Http\Controllers\RoleController;
@@ -35,6 +39,14 @@ Route::prefix('backend')->group(function () {
                 'data' => $request->user()->load('role.permissions')->toApiArray(),
             ]);
         });
+        // Dashboard and analytics numbers
+        Route::get('/dashboard', [DashboardController::class, 'stats'])->middleware("can:access-page,'dashboard'");
+        Route::get('/analytics', [DashboardController::class, 'stats'])->middleware("can:access-page,'analytics'");
+        // Registered customers, and staff tier changes
+        Route::middleware("can:access-page,'customers'")->group(function () {
+            Route::get('customers', [AdminCustomerController::class, 'index']);
+            Route::patch('customers/{customer}/tier', [AdminCustomerController::class, 'updateTier']);
+        });
         // Catalog setup
         Route::apiResource('categories', CategoryController::class)->middleware("can:access-page,'categories'");
         Route::apiResource('products', ProductController::class)->middleware("can:access-page,'products'");
@@ -56,6 +68,13 @@ Route::prefix('backend')->group(function () {
         Route::middleware("can:access-page,'referrals'")->group(function () {
             Route::get('referrals', [ReferralController::class, 'index']);
             Route::patch('referrals/{referral}/complete', [ReferralController::class, 'complete']);
+        });
+        // Reward redemptions waiting to be shipped or picked up
+        Route::middleware("can:access-page,'fulfillment'")->prefix('redemptions')->group(function () {
+            Route::get('/', [AdminRedemptionController::class, 'index']);
+            Route::patch('{redemption}/fulfill', [AdminRedemptionController::class, 'fulfill']);
+            Route::patch('{redemption}/cancel', [AdminRedemptionController::class, 'cancel']);
+            Route::patch('{redemption}/extend', [AdminRedemptionController::class, 'extend']);
         });
         Route::middleware("can:access-page,'campaigns'")->group(function () {
             Route::patch('campaigns/{campaign}/status', [CampaignController::class, 'updateStatus']);
@@ -81,6 +100,7 @@ Route::get('/campaigns/banners', [CampaignController::class, 'banners']);
 Route::get('/catalog/categories', [CatalogController::class, 'categories']);
 Route::get('/catalog/products', [CatalogController::class, 'products']);
 Route::get('/catalog/tiers', [CatalogController::class, 'tiers']);
+Route::get('/catalog/rewards', [CatalogController::class, 'rewards']);
 
 Route::post('/register', [CustomerAuthController::class, 'register']);
 Route::middleware('throttle:10,1')->group(function () {
@@ -116,6 +136,10 @@ Route::middleware('auth:customer')->group(function () {
         Route::get('{md5}', [KhqrPaymentController::class, 'show']);
         Route::post('{md5}/simulate', [KhqrPaymentController::class, 'simulate']);
     });
+    // Own reward redemptions: redeeming spends points; cancelling a held one refunds them
+    Route::get('/redemptions', [RedemptionController::class, 'index']);
+    Route::post('/redemptions', [RedemptionController::class, 'store']);
+    Route::post('/redemptions/{redemption}/cancel', [RedemptionController::class, 'cancel']);
     // Own orders: placing one with a paid KHQR code earns its points and converts a pending referral
     Route::get('/orders', [OrderController::class, 'index']);
     Route::post('/orders', [OrderController::class, 'store']);

@@ -36,6 +36,11 @@ return [
     ],
 
     // Demo-only KHQR (Bakong) checkout. Nothing is charged; the account below is made up and cannot receive money.
+    // Reward redemptions: hours a redeemed reward is held before it expires and its points are refunded.
+    'redemptions' => [
+        'hold_hours' => (int) env('REDEMPTION_HOLD_HOURS', 72),
+    ],
+
     'khqr' => [
         'account_id' => env('KHQR_ACCOUNT_ID', 'khmer_shop_demo@demo'),
         'merchant_name' => env('KHQR_MERCHANT_NAME', 'Khmer Shop'),
