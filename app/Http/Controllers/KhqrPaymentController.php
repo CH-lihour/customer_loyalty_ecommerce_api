@@ -16,7 +16,7 @@ use Illuminate\Validation\ValidationException;
  * It follows the shape of the real Bakong flow so a real integration can replace it later: the shop makes a
  * KHQR string for the amount, the customer scans it, and the shop checks the payment by the string's MD5
  * until it is paid or the code expires. Here the customer presses "Simulate payment" instead of paying.
- * Payments live in the cache only, because the API does not store orders yet.
+ * Payments live in the cache; POST /api/orders turns a paid one into an order (see OrderController).
  */
 class KhqrPaymentController extends Controller
 {
@@ -141,7 +141,7 @@ class KhqrPaymentController extends Controller
         Cache::put($this->key($payment['md5']), $payment, Carbon::parse($payment['expires_at'])->addHour());
     }
 
-    private function key(string $md5): string
+    public static function key(string $md5): string
     {
         return 'khqr-payment:'.$md5;
     }

@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\PointAdjustmentRequest;
+use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\LoyaltyTransaction;
+use App\Models\Tier;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -117,6 +119,27 @@ class PointController extends Controller
                 ->paginate($this->perPage($request));
 
             return $this->paginatedResponse($transactions, 'Points history retrieved successfully');
+        });
+    }
+
+    /**
+     * Show the signed-in customer the multipliers their next order earns with, so the cart can preview the
+     * points exactly as checkout will award them.
+     */
+    public function rules(Request $request): JsonResponse
+    {
+        return $this->attempt('Could not load the points rules.', function () use ($request): JsonResponse {
+            $tier = Tier::find($request->user()->tier_id);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Points rules retrieved successfully',
+                'data' => [
+                    'tier' => $tier?->name,
+                    'tier_multiplier' => (float) ($tier?->multiplier ?? 1),
+                    'campaign_multiplier' => Campaign::currentMultiplier(),
+                ],
+            ]);
         });
     }
 

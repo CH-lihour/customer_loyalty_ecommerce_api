@@ -44,6 +44,10 @@ return [
         'lifetime' => (int) env('KHQR_LIFETIME', 180),
         // Allows the "Simulate payment" button. Off in production unless set.
         'simulate' => (bool) env('KHQR_SIMULATE', env('APP_ENV') !== 'production'),
+        // Riel per US dollar, for checking a KHR payment covers an order priced in USD. Matches the shop's default.
+        'khr_rate' => (float) env('KHQR_KHR_RATE', 4000),
+        // How far a KHR payment may be from the order total at that rate, as a fraction (0.02 = 2%).
+        'khr_tolerance' => (float) env('KHQR_KHR_TOLERANCE', 0.02),
     ],
 
 ];

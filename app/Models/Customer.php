@@ -45,6 +45,26 @@ class Customer extends Authenticatable
     }
 
     /**
+     * Get the customer's orders.
+     *
+     * @return HasMany<Order, $this>
+     */
+    public function orders(): HasMany
+    {
+        return $this->hasMany(Order::class);
+    }
+
+    /**
+     * Get the referral made when this customer signed up with someone's code, if any.
+     *
+     * @return HasOne<Referral, $this>
+     */
+    public function referredBy(): HasOne
+    {
+        return $this->hasOne(Referral::class, 'referred_id');
+    }
+
+    /**
      * Get the referrals of customers who signed up with this customer's code.
      *
      * @return HasMany<Referral, $this>
@@ -86,13 +106,14 @@ class Customer extends Authenticatable
     /**
      * Change the points balance and add the matching ledger row, one at a time per customer.
      *
-     * Points earned from orders count toward the customer's tier; every other type changes only the balance.
+     * Points earned from orders count toward the customer's tier, and move the customer up to the highest tier
+     * their qualifying points reach. Every other type changes only the balance.
      *
      * @throws ValidationException when the change would take the balance below zero.
      */
-    public function recordPoints(string $type, int $points, ?string $reason = null, ?int $createdBy = null): LoyaltyTransaction
+    public function recordPoints(string $type, int $points, ?string $reason = null, ?int $createdBy = null, ?int $orderId = null): LoyaltyTransaction
     {
-        return DB::transaction(function () use ($type, $points, $reason, $createdBy): LoyaltyTransaction {
+        return DB::transaction(function () use ($type, $points, $reason, $createdBy, $orderId): LoyaltyTransaction {
             $customer = self::query()->lockForUpdate()->findOrFail($this->id);
             $before = $customer->points_balance;
             $after = $before + $points;
@@ -107,12 +128,14 @@ class Customer extends Authenticatable
 
             if ($type === LoyaltyTransaction::TYPE_EARN) {
                 $customer->qualifying_points += $points;
+                $customer->moveUpTier($reason);
             }
 
             $customer->save();
             $this->setRawAttributes($customer->getAttributes(), true);
 
             return $customer->loyaltyTransactions()->create([
+                'order_id' => $orderId,
                 'created_by' => $createdBy,
                 'type' => $type,
                 'points' => $points,
@@ -121,6 +144,44 @@ class Customer extends Authenticatable
                 'reason' => $reason,
             ]);
         });
+    }
+
+    /**
+     * Put the customer in the highest tier their qualifying points reach, if it is above their current one,
+     * and record the move. Tiers are never lowered here: staff manage those changes.
+     */
+    private function moveUpTier(?string $reason): void
+    {
+        $current = Tier::find($this->tier_id);
+        $reached = Tier::query()
+            ->where('min_points', '<=', $this->qualifying_points)
+            ->orderByDesc('min_points')
+            ->first();
+
+        if (! $reached || ($current && $reached->min_points <= $current->min_points)) {
+            return;
+        }
+
+        $this->tier_id = $reached->id;
+
+        if ($current) {
+            DB::table('tier_histories')->insert([
+                'customer_id' => $this->id,
+                'from_tier_id' => $current->id,
+                'to_tier_id' => $reached->id,
+                'reason' => $reason,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        DB::table('activity_logs')->insert([
+            'customer_id' => $this->id,
+            'event' => 'TIER_CHANGED',
+            'description' => ($current?->name ?? 'No tier')." → {$reached->name}",
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 
     /**

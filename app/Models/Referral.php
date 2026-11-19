@@ -59,11 +59,13 @@ class Referral extends Model
     /**
      * Mark the referral converted and give both customers their REFERRAL points, once.
      *
+     * Staff do it by hand (`$staffId`), or the friend's first paid order does it (`$order`).
+     *
      * @throws ValidationException when the referral was already converted.
      */
-    public function complete(?int $staffId = null): self
+    public function complete(?int $staffId = null, ?Order $order = null): self
     {
-        return DB::transaction(function () use ($staffId): self {
+        return DB::transaction(function () use ($staffId, $order): self {
             // Lock the row so two clicks cannot pay the bonus twice.
             $referral = self::query()->with(['referrer', 'referred'])->lockForUpdate()->findOrFail($this->id);
 
@@ -82,9 +84,16 @@ class Referral extends Model
             $referrer = $referral->referrer;
             $referred = $referral->referred;
 
+            $referrerReason = $order
+                ? "Referral bonus: {$referred->name} made their first order"
+                : "Referral bonus: {$referred->name} joined with your code";
+            $referredReason = $order
+                ? "Welcome bonus: first order {$order->order_number} with {$referrer->name}'s referral code"
+                : "Welcome bonus: joined with {$referrer->name}'s referral code";
+
             foreach ([
-                [$referrer, self::REFERRER_POINTS, "Referral bonus: {$referred->name} joined with your code"],
-                [$referred, self::REFERRED_POINTS, "Welcome bonus: joined with {$referrer->name}'s referral code"],
+                [$referrer, self::REFERRER_POINTS, $referrerReason],
+                [$referred, self::REFERRED_POINTS, $referredReason],
             ] as [$customer, $points, $reason]) {
                 $customer->recordPoints(LoyaltyTransaction::TYPE_REFERRAL, $points, $reason, $staffId);
 

@@ -1,11 +1,14 @@
 <?php
 
+use App\Http\Controllers\AdminOrderController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BadgeController;
 use App\Http\Controllers\CampaignController;
+use App\Http\Controllers\CatalogController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\CustomerAuthController;
 use App\Http\Controllers\KhqrPaymentController;
+use App\Http\Controllers\OrderController;
 use App\Http\Controllers\PointController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ReferralController;
@@ -13,6 +16,7 @@ use App\Http\Controllers\RewardController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\TierController;
 use App\Http\Controllers\UserController;
+use App\Models\Order;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -43,7 +47,12 @@ Route::prefix('backend')->group(function () {
             Route::get('customers', [PointController::class, 'customers']);
             Route::post('adjustments', [PointController::class, 'adjust']);
         });
-        // Referrals: staff mark one converted until orders can do it
+        // Orders: points come when an order is paid; cancelling takes them back
+        Route::middleware("can:access-page,'orders'")->group(function () {
+            Route::get('orders', [AdminOrderController::class, 'index']);
+            Route::patch('orders/{order}/status', [AdminOrderController::class, 'updateStatus']);
+        });
+        // Referrals convert on the friend's first paid order; staff can also mark one converted
         Route::middleware("can:access-page,'referrals'")->group(function () {
             Route::get('referrals', [ReferralController::class, 'index']);
             Route::patch('referrals/{referral}/complete', [ReferralController::class, 'complete']);
@@ -68,6 +77,10 @@ Route::prefix('backend')->group(function () {
 // Customer Side
 // Home-page banners, public so guests see them too
 Route::get('/campaigns/banners', [CampaignController::class, 'banners']);
+// Storefront catalog, public so guests can browse
+Route::get('/catalog/categories', [CatalogController::class, 'categories']);
+Route::get('/catalog/products', [CatalogController::class, 'products']);
+Route::get('/catalog/tiers', [CatalogController::class, 'tiers']);
 
 Route::post('/register', [CustomerAuthController::class, 'register']);
 Route::middleware('throttle:10,1')->group(function () {
@@ -84,11 +97,17 @@ Route::middleware('auth:customer')->group(function () {
         return response()->json([
             'success' => true,
             'message' => 'Profile retrieved successfully',
-            'data' => $request->user()->only(['id', 'name', 'email', 'phone', 'referral_code', 'points_balance', 'qualifying_points']),
+            'data' => [
+                ...$request->user()->only(['id', 'name', 'email', 'phone', 'referral_code', 'points_balance', 'qualifying_points', 'total_spent']),
+                'tier' => $request->user()->tier?->name,
+                'orders_count' => $request->user()->orders()->where('status', '!=', Order::STATUS_CANCELLED)->count(),
+            ],
         ]);
     });
     // Own points history
     Route::get('/points', [PointController::class, 'history']);
+    // The tier and campaign multipliers the next order earns with
+    Route::get('/points/rules', [PointController::class, 'rules']);
     // Own referral code and the friends who joined with it
     Route::get('/referrals', [ReferralController::class, 'mine']);
     // Demo KHQR checkout payment: make a code, check it, and pretend to pay it
@@ -97,4 +116,7 @@ Route::middleware('auth:customer')->group(function () {
         Route::get('{md5}', [KhqrPaymentController::class, 'show']);
         Route::post('{md5}/simulate', [KhqrPaymentController::class, 'simulate']);
     });
+    // Own orders: placing one with a paid KHQR code earns its points and converts a pending referral
+    Route::get('/orders', [OrderController::class, 'index']);
+    Route::post('/orders', [OrderController::class, 'store']);
 });

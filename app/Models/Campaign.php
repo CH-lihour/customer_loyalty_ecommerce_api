@@ -50,6 +50,14 @@ class Campaign extends Model
     }
 
     /**
+     * The points multiplier orders get today: the best live campaign's, and never below 1.
+     */
+    public static function currentMultiplier(): float
+    {
+        return max(1.0, (float) self::query()->live()->max('multiplier'));
+    }
+
+    /**
      * Whether the image was uploaded here, rather than being an external URL.
      */
     public function hasUploadedImage(): bool
